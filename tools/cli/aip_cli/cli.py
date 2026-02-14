@@ -52,7 +52,7 @@ def get_client(
 
 
 @click.group()
-@click.version_option(version="0.3.0")
+@click.version_option(version="0.3.1")
 def cli():
     """
     AIP CLI - Command-line tools for Agent Identity Protocol

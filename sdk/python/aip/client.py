@@ -45,13 +45,16 @@ class AIPClient:
 
         Args:
             registry_url: Base URL of the registry (e.g., "https://registry.aip.dev")
-            api_key: Optional API key for authentication
+            api_key: Optional API key for authentication (also reads from AIP_API_KEY env var)
             timeout: Request timeout in seconds (default: 30)
             max_retries: Maximum number of retries for failed requests (default: 3)
             backoff_factor: Exponential backoff factor (default: 0.5)
         """
+        import os
+
         self.registry_url = registry_url.rstrip("/")
-        self.api_key = api_key
+        # Use provided API key or fall back to environment variable
+        self.api_key = api_key or os.getenv("AIP_API_KEY")
         self.timeout = timeout
         self.session = requests.Session()
 
@@ -68,8 +71,8 @@ class AIPClient:
 
         # Set default headers
         self.session.headers.update({"Content-Type": "application/json"})
-        if api_key:
-            self.session.headers.update({"Authorization": f"Bearer {api_key}"})
+        if self.api_key:
+            self.session.headers.update({"Authorization": f"Bearer {self.api_key}"})
 
     def _handle_response(self, response: requests.Response) -> dict:
         """Handle API response and raise errors if needed"""

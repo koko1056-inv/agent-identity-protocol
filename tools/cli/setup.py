@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="aip-cli",
-    version="0.3.0",
+    version="0.3.1",
     author="Agent Identity Protocol Working Group",
     description="Command-line tools for Agent Identity Protocol",
     url="https://github.com/koko1056-inv/agent-identity-protocol",

@@ -93,6 +93,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.1] - 2026-02-15
+
+### Added
+- **FEATURES.md** - Complete feature overview and status tracking
+- **docs/API_KEYS.md** - Comprehensive API key usage guide
+
+### Security
+- **Admin API Protection** - Master key authentication for /admin endpoints
+  - Set `ADMIN_KEY` environment variable to protect admin routes
+  - Graceful fallback for development (warns if unprotected)
+- **Python SDK Environment Variable Support** - `AIP_API_KEY` auto-detection
+
+### Improved
+- **Python SDK API Key Support**
+  - Constructor accepts `api_key` parameter
+  - Automatically reads from `AIP_API_KEY` environment variable
+- **TypeScript SDK Major Enhancements**
+  - Automatic retry logic with exponential backoff
+  - Timeout support (configurable)
+  - `searchAll()` - Auto-pagination for complete results
+  - `healthCheck()` - Health status endpoint
+  - Environment variable support (`AIP_API_KEY`)
+  - Options-based constructor for better configuration
+  - Backwards compatible with old constructor signature
+
+### Documentation
+- Complete API key usage guide with examples
+- Security best practices
+- CI/CD integration patterns
+- Troubleshooting guide
+
+---
+
 ## [0.3.0] - 2026-02-15
 
 ### Added

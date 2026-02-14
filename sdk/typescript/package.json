@@ -1,6 +1,6 @@
 {
   "name": "agent-identity-protocol",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "TypeScript SDK for the Agent Identity Protocol (AIP)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -1,5 +1,6 @@
 /**
  * Admin API routes for API key management
+ * Protected by admin authentication
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
@@ -7,9 +8,13 @@ import { prisma } from '../db/client';
 import { z } from 'zod';
 import { NotFoundError } from '../middleware/errorHandler';
 import { writeLimiter } from '../middleware/rateLimit';
+import { requireAdmin } from '../middleware/adminAuth';
 import crypto from 'crypto';
 
 const router = Router();
+
+// Apply admin authentication to all routes
+router.use(requireAdmin);
 
 // Validation schemas
 const CreateApiKeySchema = z.object({

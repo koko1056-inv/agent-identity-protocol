@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="agent-identity-protocol",
-    version="0.3.0",
+    version="0.3.1",
     author="Agent Identity Protocol Working Group",
     author_email="",
     description="Python SDK for the Agent Identity Protocol (AIP)",
