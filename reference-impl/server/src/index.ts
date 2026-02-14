@@ -8,6 +8,7 @@ import swaggerUi from 'swagger-ui-express';
 import agentsRouter from './routes/agents';
 import adminRouter from './routes/admin';
 import webhooksRouter from './routes/webhooks';
+import metricsRouter from './routes/metrics';
 import { errorHandler } from './middleware/errorHandler';
 import { requestIdMiddleware } from './middleware/requestId';
 import { authenticateApiKey, requirePermission } from './middleware/auth';
@@ -105,6 +106,7 @@ app.get('/swagger.json', (req, res) => {
 
 // Routes
 app.use('/agents', agentsRouter);
+app.use('/metrics', metricsRouter);
 
 // Admin routes (protected)
 app.use('/admin', adminRouter);

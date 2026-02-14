@@ -93,6 +93,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.0] - 2026-02-15
+
+### Added
+
+#### Comprehensive Integration Tests
+- **Full E2E Test Suite** - Complete integration test coverage
+  - Health check tests
+  - Agent CRUD operations
+  - Search and filtering
+  - API key authentication
+  - Admin API (API keys, webhooks)
+  - Metrics reporting
+  - Rate limiting verification
+  - Swagger documentation endpoints
+- **Test Infrastructure**:
+  - Supertest for HTTP testing
+  - Test database configuration (.env.test)
+  - 200+ test assertions
+  - Proper setup/teardown
+
+#### Metrics & Monitoring System
+- **Statistics Endpoint** (`/metrics/stats`)
+  - Total agents, API keys, webhooks
+  - Agents by skill distribution
+  - Active resource counts
+- **Top Agents Endpoint** (`/metrics/top-agents`)
+  - Ranked by performance metrics
+  - Configurable limit
+- **Prometheus Integration** (`/metrics/prometheus`)
+  - Prometheus text format export
+  - Gauges and counters
+  - Average performance metrics
+- **Monitoring Guide** (`docs/MONITORING.md`)
+  - Grafana + Prometheus setup
+  - Docker Compose configuration
+  - Cloud monitoring (AWS/GCP/Datadog)
+  - Alerting rules
+  - Custom dashboard examples
+  - Health check strategies
+
+### Dependencies
+- Added supertest (testing)
+- Added @types/supertest
+
+---
+
 ## [0.4.0] - 2026-02-15
 
 ### Added
