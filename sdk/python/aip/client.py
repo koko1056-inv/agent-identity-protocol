@@ -1,0 +1,214 @@
+"""
+AIP Client for interacting with agent registries
+"""
+
+from typing import List, Optional
+import requests
+from .models import (
+    AgentProfile,
+    Metrics,
+    SearchResponse,
+    RegistrationResponse,
+    UpdateResponse,
+    MetricsReportResponse,
+    APIError,
+)
+
+
+class AIPClientError(Exception):
+    """Base exception for AIP client errors"""
+
+    def __init__(self, message: str, code: Optional[str] = None, details: Optional[any] = None):
+        self.message = message
+        self.code = code
+        self.details = details
+        super().__init__(self.message)
+
+
+class AIPClient:
+    """Client for interacting with AIP registries"""
+
+    def __init__(self, registry_url: str, api_key: Optional[str] = None, timeout: int = 30):
+        """
+        Initialize AIP client
+
+        Args:
+            registry_url: Base URL of the registry (e.g., "https://registry.aip.dev")
+            api_key: Optional API key for authentication
+            timeout: Request timeout in seconds (default: 30)
+        """
+        self.registry_url = registry_url.rstrip("/")
+        self.api_key = api_key
+        self.timeout = timeout
+        self.session = requests.Session()
+
+        # Set default headers
+        self.session.headers.update({"Content-Type": "application/json"})
+        if api_key:
+            self.session.headers.update({"Authorization": f"Bearer {api_key}"})
+
+    def _handle_response(self, response: requests.Response) -> dict:
+        """Handle API response and raise errors if needed"""
+        try:
+            data = response.json()
+        except ValueError:
+            raise AIPClientError(f"Invalid JSON response: {response.text}")
+
+        if not response.ok:
+            error = APIError(**data) if isinstance(data, dict) else APIError(error=str(data))
+            raise AIPClientError(error.error, error.code, error.details)
+
+        return data
+
+    def register(self, profile: AgentProfile) -> RegistrationResponse:
+        """
+        Register a new agent in the registry
+
+        Args:
+            profile: Complete agent profile
+
+        Returns:
+            Registration response with ID and timestamp
+
+        Raises:
+            AIPClientError: If registration fails
+        """
+        response = self.session.post(
+            f"{self.registry_url}/agents",
+            json=profile.model_dump(exclude_none=True),
+            timeout=self.timeout,
+        )
+        data = self._handle_response(response)
+        return RegistrationResponse(**data)
+
+    def get_agent(self, agent_id: str) -> AgentProfile:
+        """
+        Get an agent profile by ID
+
+        Args:
+            agent_id: Unique agent identifier
+
+        Returns:
+            Full agent profile
+
+        Raises:
+            AIPClientError: If agent not found or request fails
+        """
+        response = self.session.get(
+            f"{self.registry_url}/agents/{agent_id}",
+            timeout=self.timeout,
+        )
+        data = self._handle_response(response)
+        return AgentProfile(**data)
+
+    def search(
+        self,
+        skill: Optional[str] = None,
+        min_confidence: float = 0.7,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> List[AgentProfile]:
+        """
+        Search for agents by skill
+
+        Args:
+            skill: Skill identifier (e.g., "text-generation")
+            min_confidence: Minimum confidence level (0.0 - 1.0)
+            limit: Maximum number of results
+            offset: Pagination offset
+
+        Returns:
+            List of matching agent profiles
+
+        Raises:
+            AIPClientError: If search fails
+        """
+        params = {
+            "min_confidence": min_confidence,
+            "limit": limit,
+            "offset": offset,
+        }
+        if skill:
+            params["skill"] = skill
+
+        response = self.session.get(
+            f"{self.registry_url}/agents",
+            params=params,
+            timeout=self.timeout,
+        )
+        data = self._handle_response(response)
+        search_response = SearchResponse(**data)
+        return search_response.results
+
+    def update(self, agent_id: str, profile: AgentProfile) -> UpdateResponse:
+        """
+        Update an existing agent profile
+
+        Args:
+            agent_id: Unique agent identifier
+            profile: Updated profile data
+
+        Returns:
+            Update response with timestamp
+
+        Raises:
+            AIPClientError: If update fails
+        """
+        response = self.session.put(
+            f"{self.registry_url}/agents/{agent_id}",
+            json=profile.model_dump(exclude_none=True),
+            timeout=self.timeout,
+        )
+        data = self._handle_response(response)
+        return UpdateResponse(**data)
+
+    def delete(self, agent_id: str) -> None:
+        """
+        Delete an agent from the registry
+
+        Args:
+            agent_id: Unique agent identifier
+
+        Raises:
+            AIPClientError: If deletion fails
+        """
+        response = self.session.delete(
+            f"{self.registry_url}/agents/{agent_id}",
+            timeout=self.timeout,
+        )
+        if response.status_code != 204:
+            self._handle_response(response)
+
+    def report_metrics(self, agent_id: str, metrics: Metrics) -> MetricsReportResponse:
+        """
+        Report performance metrics for an agent
+
+        Args:
+            agent_id: Unique agent identifier
+            metrics: Performance metrics to report
+
+        Returns:
+            Metrics report response with timestamp
+
+        Raises:
+            AIPClientError: If reporting fails
+        """
+        response = self.session.post(
+            f"{self.registry_url}/agents/{agent_id}/metrics",
+            json=metrics.model_dump(exclude_none=True),
+            timeout=self.timeout,
+        )
+        data = self._handle_response(response)
+        return MetricsReportResponse(**data)
+
+    def close(self):
+        """Close the HTTP session"""
+        self.session.close()
+
+    def __enter__(self):
+        """Context manager entry"""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit"""
+        self.close()

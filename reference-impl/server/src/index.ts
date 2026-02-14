@@ -5,23 +5,43 @@ import compression from 'compression';
 import dotenv from 'dotenv';
 import agentsRouter from './routes/agents';
 import { errorHandler } from './middleware/errorHandler';
+import { requestIdMiddleware } from './middleware/requestId';
 import { prisma } from './db/client';
+import { validateConfig } from './utils/config';
+import { logger } from './utils/logger';
 
 // Load environment variables
 dotenv.config();
 
+// Validate configuration
+const config = validateConfig();
+
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = config.PORT;
 
 // Middleware
 app.use(helmet()); // Security headers
-app.use(cors()); // CORS
+app.use(cors({
+  origin: config.CORS_ORIGIN || '*',
+  credentials: true,
+})); // CORS
 app.use(compression()); // Gzip compression
-app.use(express.json()); // JSON body parser
+app.use(express.json({ limit: '1mb' })); // JSON body parser with size limit
+app.use(requestIdMiddleware); // Request ID
 
-// Request logging (simple)
+// Request logging
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path}`);
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    logger.info('HTTP Request', {
+      method: req.method,
+      path: req.path,
+      status: res.statusCode,
+      duration,
+      requestId: req.headers['x-request-id'],
+    });
+  });
   next();
 });
 

@@ -6,6 +6,7 @@ import {
   SearchQuerySchema,
 } from '../middleware/validation';
 import { NotFoundError, ConflictError } from '../middleware/errorHandler';
+import { searchLimiter, writeLimiter, registerLimiter } from '../middleware/rateLimit';
 
 const router = Router();
 
@@ -13,7 +14,7 @@ const router = Router();
  * POST /agents
  * Register a new agent
  */
-router.post('/', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/', registerLimiter, async (req: Request, res: Response, next: NextFunction) => {
   try {
     // Validate request body
     const data = AgentProfileSchema.parse(req.body);
@@ -64,7 +65,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
  * GET /agents
  * Search for agents
  */
-router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/', searchLimiter, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const query = SearchQuerySchema.parse(req.query);
 
@@ -139,7 +140,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
  * GET /agents/:id
  * Get a specific agent profile
  */
-router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/:id', searchLimiter, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const agent = await prisma.agent.findUnique({
       where: { id: req.params.id },
@@ -189,7 +190,7 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
  * PUT /agents/:id
  * Update an agent profile
  */
-router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.put('/:id', writeLimiter, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = AgentProfileSchema.parse(req.body);
 
@@ -236,7 +237,7 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
  * DELETE /agents/:id
  * Delete an agent
  */
-router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/:id', writeLimiter, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const existing = await prisma.agent.findUnique({
       where: { id: req.params.id },
@@ -260,7 +261,7 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
  * POST /agents/:id/metrics
  * Report metrics for an agent
  */
-router.post('/:id/metrics', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/:id/metrics', writeLimiter, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = MetricsUpdateSchema.parse(req.body);
 

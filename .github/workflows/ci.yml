@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-server:
+    name: Test Reference Server
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aip
+          POSTGRES_PASSWORD: aip_password
+          POSTGRES_DB: aip_registry
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: reference-impl/server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: reference-impl/server
+        run: npm ci
+
+      - name: Generate Prisma Client
+        working-directory: reference-impl/server
+        run: npx prisma generate
+
+      - name: Run migrations
+        working-directory: reference-impl/server
+        env:
+          DATABASE_URL: postgresql://aip:aip_password@localhost:5432/aip_registry?schema=public
+        run: npx prisma migrate deploy
+
+      - name: Run tests
+        working-directory: reference-impl/server
+        env:
+          DATABASE_URL: postgresql://aip:aip_password@localhost:5432/aip_registry?schema=public
+        run: npm test
+
+      - name: Build
+        working-directory: reference-impl/server
+        run: npm run build
+
+  test-typescript-sdk:
+    name: Test TypeScript SDK
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: sdk/typescript/package-lock.json
+
+      - name: Install dependencies
+        working-directory: sdk/typescript
+        run: npm ci
+
+      - name: Build
+        working-directory: sdk/typescript
+        run: npm run build
+
+  test-python-sdk:
+    name: Test Python SDK
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        working-directory: sdk/python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Type check
+        working-directory: sdk/python
+        run: mypy aip
+
+      - name: Lint
+        working-directory: sdk/python
+        run: ruff check aip
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install TypeScript dependencies
+        working-directory: sdk/typescript
+        run: npm ci
+
+      - name: Lint TypeScript SDK
+        working-directory: sdk/typescript
+        run: npm run lint
