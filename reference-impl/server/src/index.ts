@@ -10,6 +10,7 @@ import adminRouter from './routes/admin';
 import webhooksRouter from './routes/webhooks';
 import metricsRouter from './routes/metrics';
 import reputationRouter from './routes/reputation';
+import bulkRouter from './routes/bulk';
 import { errorHandler } from './middleware/errorHandler';
 import { requestIdMiddleware } from './middleware/requestId';
 import { authenticateApiKey, requirePermission } from './middleware/auth';
@@ -109,6 +110,7 @@ app.get('/swagger.json', (req, res) => {
 app.use('/agents', agentsRouter);
 app.use('/metrics', metricsRouter);
 app.use('/reputation', reputationRouter);
+app.use('/bulk', bulkRouter);
 
 // Admin routes (protected)
 app.use('/admin', adminRouter);

@@ -6,6 +6,14 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../db/client';
 import { UnauthorizedError, ForbiddenError } from './errorHandler';
 import { logger } from '../utils/logger';
+import crypto from 'crypto';
+
+/**
+ * Hash API key for comparison
+ */
+function hashApiKey(key: string): string {
+  return crypto.createHash('sha256').update(key).digest('hex');
+}
 
 interface AuthenticatedRequest extends Request {
   apiKey?: {
@@ -45,13 +53,16 @@ export async function authenticateApiKey(req: AuthenticatedRequest, res: Respons
       throw new UnauthorizedError('API key required. Provide via Authorization header: "Bearer <key>"');
     }
 
-    // Look up API key
+    // Hash the provided key for comparison
+    const hashedKey = hashApiKey(keyValue);
+
+    // Look up API key by hashed value
     const apiKey = await prisma.apiKey.findUnique({
-      where: { key: keyValue },
+      where: { key: hashedKey },
     });
 
     if (!apiKey) {
-      logger.warn('Invalid API key attempt', { key: keyValue.substring(0, 8) + '...' });
+      logger.warn('Invalid API key attempt', { keyPrefix: keyValue.substring(0, 8) + '...' });
       throw new UnauthorizedError('Invalid API key');
     }
 

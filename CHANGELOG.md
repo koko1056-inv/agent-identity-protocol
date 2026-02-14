@@ -93,6 +93,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.0] - 2026-02-15
+
+### Security Enhancements 🔒
+- **API Key Hashing** - Keys now stored as SHA-256 hashes (CRITICAL fix)
+  - Plain key only returned on creation
+  - Authentication uses hash comparison
+  - Eliminates plaintext key exposure risk
+
+### Performance Optimizations ⚡
+- **Database Index Optimization**:
+  - Composite index on agents (name + version)
+  - Compound index on capabilities (skill + confidence)
+  - Performance indexes on metrics (success_rate, tasks_completed)
+  - Active API keys lookup optimization
+  - Reviews query optimization
+  - Webhook event filtering optimization
+- Improved query performance for common operations
+
+### New Features 🆕
+- **Bulk Operations API** (`/bulk/*`):
+  - `POST /bulk/register` - Register up to 100 agents at once
+  - `POST /bulk/delete` - Delete up to 100 agents at once
+  - Detailed success/failure reporting per agent
+  - Automatic webhook triggering
+  - Transaction-safe operations
+
+### Code Quality
+- Added comprehensive improvement tracking (IMPROVEMENTS.md)
+- Enhanced error logging
+- Better code organization
+
+---
+
 ## [0.6.0] - 2026-02-15
 
 ### Added

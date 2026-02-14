@@ -16,6 +16,13 @@ const router = Router();
 // Apply admin authentication to all routes
 router.use(requireAdmin);
 
+/**
+ * Hash API key for secure storage
+ */
+function hashApiKey(key: string): string {
+  return crypto.createHash('sha256').update(key).digest('hex');
+}
+
 // Validation schemas
 const CreateApiKeySchema = z.object({
   name: z.string().min(1).max(100),
@@ -64,10 +71,11 @@ router.post('/api-keys', writeLimiter, async (req: Request, res: Response, next:
     const data = CreateApiKeySchema.parse(req.body);
 
     const key = generateApiKey();
+    const hashedKey = hashApiKey(key);
 
     const apiKey = await prisma.apiKey.create({
       data: {
-        key,
+        key: hashedKey, // Store hashed key
         name: data.name,
         description: data.description,
         permissions: (data.permissions || {
@@ -82,7 +90,7 @@ router.post('/api-keys', writeLimiter, async (req: Request, res: Response, next:
 
     res.status(201).json({
       id: apiKey.id,
-      key: apiKey.key, // Only returned once!
+      key, // Return plain key ONLY on creation!
       name: apiKey.name,
       description: apiKey.description,
       permissions: apiKey.permissions,
