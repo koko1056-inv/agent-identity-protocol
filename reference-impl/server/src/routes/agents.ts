@@ -10,6 +10,7 @@ import { searchLimiter, writeLimiter, registerLimiter } from '../middleware/rate
 import { authenticateApiKey, requirePermission, optionalAuth } from '../middleware/auth';
 import { searchCache, agentCache } from '../utils/cache';
 import { logger } from '../utils/logger';
+import { triggerWebhooks } from '../services/webhooks';
 
 const router = Router();
 
@@ -107,6 +108,13 @@ router.post(
     // Invalidate caches
     searchCache.clear();
     agentCache.delete(`agent:${agent.id}`);
+
+    // Trigger webhooks
+    triggerWebhooks('agent.registered', {
+      id: agent.id,
+      name: agent.name,
+      version: agent.version,
+    }).catch((err) => logger.error('Webhook trigger failed', { error: err.message }));
 
     res.status(201).json({
       id: agent.id,
@@ -373,6 +381,13 @@ router.put(
     searchCache.clear();
     agentCache.delete(`agent:${req.params.id}`);
 
+    // Trigger webhooks
+    triggerWebhooks('agent.updated', {
+      id: agent.id,
+      name: agent.name,
+      version: agent.version,
+    }).catch((err) => logger.error('Webhook trigger failed', { error: err.message }));
+
     res.json({
       updated_at: agent.updatedAt.toISOString(),
     });
@@ -400,13 +415,20 @@ router.delete(
       throw new NotFoundError('Agent not found');
     }
 
+    const agentId = req.params.id;
+
     await prisma.agent.delete({
-      where: { id: req.params.id },
+      where: { id: agentId },
     });
 
     // Invalidate caches
     searchCache.clear();
-    agentCache.delete(`agent:${req.params.id}`);
+    agentCache.delete(`agent:${agentId}`);
+
+    // Trigger webhooks
+    triggerWebhooks('agent.deleted', {
+      id: agentId,
+    }).catch((err) => logger.error('Webhook trigger failed', { error: err.message }));
 
     res.status(204).send();
   } catch (error) {
@@ -454,6 +476,12 @@ router.post(
         uptime30d: data.uptime_30d,
       },
     });
+
+    // Trigger webhooks
+    triggerWebhooks('agent.metrics_reported', {
+      id: req.params.id,
+      metrics: data,
+    }).catch((err) => logger.error('Webhook trigger failed', { error: err.message }));
 
     res.json({
       recorded_at: metrics.updatedAt.toISOString(),

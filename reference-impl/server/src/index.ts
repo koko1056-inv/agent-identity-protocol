@@ -7,6 +7,7 @@ import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import agentsRouter from './routes/agents';
 import adminRouter from './routes/admin';
+import webhooksRouter from './routes/webhooks';
 import { errorHandler } from './middleware/errorHandler';
 import { requestIdMiddleware } from './middleware/requestId';
 import { authenticateApiKey, requirePermission } from './middleware/auth';
@@ -107,6 +108,7 @@ app.use('/agents', agentsRouter);
 
 // Admin routes (protected)
 app.use('/admin', adminRouter);
+app.use('/admin/webhooks', webhooksRouter);
 
 // 404 handler
 app.use((req, res) => {
