@@ -1,9 +1,13 @@
 """
 AIP Client for interacting with agent registries
+Enhanced with retry logic and improved error handling
 """
 
 from typing import List, Optional
+import time
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from .models import (
     AgentProfile,
     Metrics,
@@ -28,19 +32,39 @@ class AIPClientError(Exception):
 class AIPClient:
     """Client for interacting with AIP registries"""
 
-    def __init__(self, registry_url: str, api_key: Optional[str] = None, timeout: int = 30):
+    def __init__(
+        self,
+        registry_url: str,
+        api_key: Optional[str] = None,
+        timeout: int = 30,
+        max_retries: int = 3,
+        backoff_factor: float = 0.5,
+    ):
         """
-        Initialize AIP client
+        Initialize AIP client with automatic retry logic
 
         Args:
             registry_url: Base URL of the registry (e.g., "https://registry.aip.dev")
             api_key: Optional API key for authentication
             timeout: Request timeout in seconds (default: 30)
+            max_retries: Maximum number of retries for failed requests (default: 3)
+            backoff_factor: Exponential backoff factor (default: 0.5)
         """
         self.registry_url = registry_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
         self.session = requests.Session()
+
+        # Configure retry strategy
+        retry_strategy = Retry(
+            total=max_retries,
+            backoff_factor=backoff_factor,
+            status_forcelist=[429, 500, 502, 503, 504],  # Retry on these status codes
+            allowed_methods=["HEAD", "GET", "OPTIONS", "POST", "PUT", "DELETE"],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
 
         # Set default headers
         self.session.headers.update({"Content-Type": "application/json"})
@@ -140,6 +164,49 @@ class AIPClient:
         search_response = SearchResponse(**data)
         return search_response.results
 
+    def search_all(
+        self,
+        skill: Optional[str] = None,
+        min_confidence: float = 0.7,
+        batch_size: int = 20,
+    ) -> List[AgentProfile]:
+        """
+        Search and fetch ALL matching agents (handles pagination automatically)
+
+        Args:
+            skill: Skill identifier (e.g., "text-generation")
+            min_confidence: Minimum confidence level (0.0 - 1.0)
+            batch_size: Number of results per batch (default: 20)
+
+        Returns:
+            Complete list of all matching agent profiles
+
+        Raises:
+            AIPClientError: If search fails
+        """
+        all_agents = []
+        offset = 0
+
+        while True:
+            batch = self.search(
+                skill=skill,
+                min_confidence=min_confidence,
+                limit=batch_size,
+                offset=offset,
+            )
+
+            if not batch:
+                break
+
+            all_agents.extend(batch)
+            offset += batch_size
+
+            # Safety check to prevent infinite loops
+            if len(all_agents) > 10000:
+                raise AIPClientError("Too many results (>10,000), please refine your search")
+
+        return all_agents
+
     def update(self, agent_id: str, profile: AgentProfile) -> UpdateResponse:
         """
         Update an existing agent profile
@@ -200,6 +267,22 @@ class AIPClient:
         )
         data = self._handle_response(response)
         return MetricsReportResponse(**data)
+
+    def health_check(self) -> dict:
+        """
+        Check registry health status
+
+        Returns:
+            Health check response with status and database connectivity
+
+        Raises:
+            AIPClientError: If health check fails
+        """
+        response = self.session.get(
+            f"{self.registry_url}/health",
+            timeout=self.timeout,
+        )
+        return self._handle_response(response)
 
     def close(self):
         """Close the HTTP session"""

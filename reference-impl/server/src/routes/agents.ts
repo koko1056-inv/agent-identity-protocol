@@ -7,6 +7,8 @@ import {
 } from '../middleware/validation';
 import { NotFoundError, ConflictError } from '../middleware/errorHandler';
 import { searchLimiter, writeLimiter, registerLimiter } from '../middleware/rateLimit';
+import { searchCache, agentCache } from '../utils/cache';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
@@ -35,10 +37,10 @@ router.post('/', registerLimiter, async (req: Request, res: Response, next: Next
         name: data.name,
         version: data.version,
         description: data.description,
-        endpoints: data.endpoints || {},
-        pricing: data.pricing || {},
-        metadata: data.metadata || {},
-        proofOfWork: data.proof_of_work || {},
+        endpoints: (data.endpoints || {}) as any,
+        pricing: (data.pricing || {}) as any,
+        metadata: (data.metadata || {}) as any,
+        proofOfWork: (data.proof_of_work || {}) as any,
         capabilities: {
           create: data.capabilities.map((cap) => ({
             skill: cap.skill,
@@ -52,6 +54,10 @@ router.post('/', registerLimiter, async (req: Request, res: Response, next: Next
       },
     });
 
+    // Invalidate caches
+    searchCache.clear();
+    agentCache.delete(`agent:${agent.id}`);
+
     res.status(201).json({
       id: agent.id,
       registered_at: agent.createdAt.toISOString(),
@@ -63,11 +69,21 @@ router.post('/', registerLimiter, async (req: Request, res: Response, next: Next
 
 /**
  * GET /agents
- * Search for agents
+ * Search for agents (with caching)
  */
 router.get('/', searchLimiter, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const query = SearchQuerySchema.parse(req.query);
+
+    // Create cache key from query params
+    const cacheKey = `search:${JSON.stringify(query)}`;
+
+    // Try cache first
+    const cached = searchCache.get(cacheKey);
+    if (cached) {
+      logger.debug('Cache hit', { key: cacheKey });
+      return res.json(cached);
+    }
 
     const where: any = {};
 
@@ -125,12 +141,17 @@ router.get('/', searchLimiter, async (req: Request, res: Response, next: NextFun
       proof_of_work: agent.proofOfWork,
     }));
 
-    res.json({
+    const response = {
       results,
       total,
       page: Math.floor((query.offset || 0) / (query.limit || 20)) + 1,
       per_page: query.limit || 20,
-    });
+    };
+
+    // Cache the response
+    searchCache.set(cacheKey, response);
+
+    res.json(response);
   } catch (error) {
     next(error);
   }
@@ -138,12 +159,22 @@ router.get('/', searchLimiter, async (req: Request, res: Response, next: NextFun
 
 /**
  * GET /agents/:id
- * Get a specific agent profile
+ * Get a specific agent profile (with caching)
  */
 router.get('/:id', searchLimiter, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const agentId = req.params.id;
+    const cacheKey = `agent:${agentId}`;
+
+    // Try cache first
+    const cached = agentCache.get(cacheKey);
+    if (cached) {
+      logger.debug('Cache hit', { key: cacheKey });
+      return res.json(cached);
+    }
+
     const agent = await prisma.agent.findUnique({
-      where: { id: req.params.id },
+      where: { id: agentId },
       include: {
         capabilities: true,
         metrics: true,
@@ -180,6 +211,9 @@ router.get('/:id', searchLimiter, async (req: Request, res: Response, next: Next
       proof_of_work: agent.proofOfWork,
     };
 
+    // Cache the profile
+    agentCache.set(cacheKey, profile);
+
     res.json(profile);
   } catch (error) {
     next(error);
@@ -210,10 +244,10 @@ router.put('/:id', writeLimiter, async (req: Request, res: Response, next: NextF
         name: data.name,
         version: data.version,
         description: data.description,
-        endpoints: data.endpoints || {},
-        pricing: data.pricing || {},
-        metadata: data.metadata || {},
-        proofOfWork: data.proof_of_work || {},
+        endpoints: (data.endpoints || {}) as any,
+        pricing: (data.pricing || {}) as any,
+        metadata: (data.metadata || {}) as any,
+        proofOfWork: (data.proof_of_work || {}) as any,
         capabilities: {
           deleteMany: {},
           create: data.capabilities.map((cap) => ({
@@ -224,6 +258,10 @@ router.put('/:id', writeLimiter, async (req: Request, res: Response, next: NextF
         },
       },
     });
+
+    // Invalidate caches
+    searchCache.clear();
+    agentCache.delete(`agent:${req.params.id}`);
 
     res.json({
       updated_at: agent.updatedAt.toISOString(),
@@ -250,6 +288,10 @@ router.delete('/:id', writeLimiter, async (req: Request, res: Response, next: Ne
     await prisma.agent.delete({
       where: { id: req.params.id },
     });
+
+    // Invalidate caches
+    searchCache.clear();
+    agentCache.delete(`agent:${req.params.id}`);
 
     res.status(204).send();
   } catch (error) {

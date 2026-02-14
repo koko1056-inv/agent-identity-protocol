@@ -1,5 +1,5 @@
 """
-AIP CLI - Main command-line interface
+AIP CLI - Enhanced command-line interface with config support and batch operations
 """
 
 import click
@@ -9,16 +9,46 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
+from rich.progress import Progress
 from rich import print as rprint
-from aip import AIPClient, create_agent, create_capability, Metrics
+from aip import AIPClient, Metrics
+from aip.helpers import (
+    load_agent_from_file,
+    save_agent_to_file,
+    batch_register,
+    batch_delete,
+    create_capability,
+    create_agent,
+)
 from aip.client import AIPClientError
+from .config import load_config, save_config, AIPConfig
 
 console = Console()
 
 
-def get_client(registry_url: str, api_key: str = None) -> AIPClient:
+def get_client(
+    registry_url: str = None,
+    api_key: str = None,
+    use_config: bool = True,
+) -> AIPClient:
     """Get AIP client from config or arguments"""
-    return AIPClient(registry_url, api_key)
+    if use_config:
+        config = load_config()
+        registry_url = registry_url or config.registry_url
+        api_key = api_key or config.api_key
+        max_retries = config.max_retries
+        timeout = config.timeout
+    else:
+        registry_url = registry_url or "http://localhost:3000"
+        max_retries = 3
+        timeout = 30
+
+    return AIPClient(
+        registry_url=registry_url,
+        api_key=api_key,
+        timeout=timeout,
+        max_retries=max_retries,
+    )
 
 
 @click.group()
@@ -28,19 +58,93 @@ def cli():
     AIP CLI - Command-line tools for Agent Identity Protocol
 
     \b
+    Configuration:
+      Set defaults in ~/.aip/config.yaml or use --registry and --api-key flags.
+
+    \b
     Examples:
+      aip config set registry https://registry.example.com
       aip register agent.yaml
       aip search text-generation
-      aip get did:aip:my-agent
-      aip delete did:aip:my-agent
+      aip batch-register agents/*.yaml
     """
     pass
 
 
+# ============= CONFIG COMMANDS =============
+
+
+@cli.group()
+def config():
+    """Manage AIP CLI configuration"""
+    pass
+
+
+@config.command(name="set")
+@click.argument("key")
+@click.argument("value")
+def config_set(key, value):
+    """
+    Set configuration value
+
+    \b
+    Examples:
+      aip config set registry https://registry.example.com
+      aip config set api_key sk-...
+      aip config set timeout 60
+    """
+    cfg = load_config()
+
+    if key == "registry":
+        cfg.registry_url = value
+    elif key == "api_key":
+        cfg.api_key = value
+    elif key == "timeout":
+        cfg.timeout = int(value)
+    elif key == "max_retries":
+        cfg.max_retries = int(value)
+    else:
+        rprint(f"[red]❌ Unknown config key: {key}[/red]")
+        raise click.Abort()
+
+    save_config(cfg)
+    rprint(f"[green]✅ Configuration updated: {key} = {value}[/green]")
+
+
+@config.command(name="get")
+@click.argument("key", required=False)
+def config_get(key):
+    """
+    Get configuration value(s)
+
+    \b
+    Examples:
+      aip config get
+      aip config get registry
+    """
+    cfg = load_config()
+
+    if key:
+        value = getattr(cfg, key.replace("-", "_"), None)
+        if value is None:
+            rprint(f"[yellow]Config key '{key}' not set[/yellow]")
+        else:
+            rprint(f"{key}: {value}")
+    else:
+        rprint("[cyan]Current Configuration:[/cyan]")
+        rprint(f"  registry_url: {cfg.registry_url}")
+        rprint(f"  api_key: {'***' if cfg.api_key else 'not set'}")
+        rprint(f"  timeout: {cfg.timeout}")
+        rprint(f"  max_retries: {cfg.max_retries}")
+
+
+# ============= AGENT COMMANDS =============
+
+
 @cli.command()
 @click.argument("file", type=click.Path(exists=True))
-@click.option("--registry", "-r", default="http://localhost:3000", help="Registry URL")
-@click.option("--api-key", "-k", help="API key for authentication")
+@click.option("--registry", "-r", help="Registry URL (overrides config)")
+@click.option("--api-key", "-k", help="API key (overrides config)")
 def register(file, registry, api_key):
     """
     Register an agent from a YAML/JSON file
@@ -55,24 +159,7 @@ def register(file, registry, api_key):
           confidence: 0.9
     """
     try:
-        # Load profile from file
-        with open(file, "r") as f:
-            if file.endswith(".yaml") or file.endswith(".yml"):
-                data = yaml.safe_load(f)
-            else:
-                data = json.load(f)
-
-        # Create agent profile
-        capabilities = [create_capability(**cap) for cap in data["capabilities"]]
-        agent = create_agent(
-            id=data["id"],
-            name=data["name"],
-            capabilities=capabilities,
-            version=data.get("version", "1.0.0"),
-            description=data.get("description"),
-        )
-
-        # Register
+        agent = load_agent_from_file(file)
         client = get_client(registry, api_key)
         result = client.register(agent)
 
@@ -91,13 +178,69 @@ def register(file, registry, api_key):
 
 
 @cli.command()
+@click.argument("pattern")
+@click.option("--registry", "-r", help="Registry URL")
+@click.option("--api-key", "-k", help="API key")
+def batch_register_cmd(pattern, registry, api_key):
+    """
+    Register multiple agents from files matching a pattern
+
+    \b
+    Examples:
+      aip batch-register "agents/*.yaml"
+      aip batch-register "*.json"
+    """
+    files = list(Path().glob(pattern))
+
+    if not files:
+        rprint(f"[yellow]No files matching pattern: {pattern}[/yellow]")
+        return
+
+    rprint(f"[cyan]Found {len(files)} file(s) to register[/cyan]")
+
+    agents = []
+    for file in files:
+        try:
+            agent = load_agent_from_file(file)
+            agents.append(agent)
+        except Exception as e:
+            rprint(f"[red]❌ Failed to load {file}: {e}[/red]")
+
+    if not agents:
+        rprint("[red]No valid agent profiles found[/red]")
+        return
+
+    client = get_client(registry, api_key)
+
+    with Progress() as progress:
+        task = progress.add_task("[cyan]Registering agents...", total=len(agents))
+
+        result = {"success": 0, "failed": 0, "errors": []}
+        for agent in agents:
+            try:
+                client.register(agent)
+                result["success"] += 1
+            except Exception as e:
+                result["failed"] += 1
+                result["errors"].append({"id": agent.id, "error": str(e)})
+            progress.update(task, advance=1)
+
+    rprint(f"\n[green]✅ Registered: {result['success']}[/green]")
+    if result["failed"] > 0:
+        rprint(f"[red]❌ Failed: {result['failed']}[/red]")
+        for err in result["errors"]:
+            rprint(f"   - {err['id']}: {err['error']}")
+
+
+@cli.command()
 @click.argument("skill", required=False)
 @click.option("--min-confidence", "-c", default=0.7, help="Minimum confidence (0.0-1.0)")
 @click.option("--limit", "-l", default=20, help="Maximum results")
-@click.option("--registry", "-r", default="http://localhost:3000", help="Registry URL")
-@click.option("--api-key", "-k", help="API key for authentication")
+@click.option("--all", "fetch_all", is_flag=True, help="Fetch all results (no pagination)")
+@click.option("--registry", "-r", help="Registry URL")
+@click.option("--api-key", "-k", help="API key")
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
-def search(skill, min_confidence, limit, registry, api_key, output_json):
+def search(skill, min_confidence, limit, fetch_all, registry, api_key, output_json):
     """
     Search for agents by skill
 
@@ -105,11 +248,15 @@ def search(skill, min_confidence, limit, registry, api_key, output_json):
     Examples:
       aip search text-generation
       aip search --min-confidence 0.9
-      aip search --json > results.json
+      aip search --all --json > all-agents.json
     """
     try:
         client = get_client(registry, api_key)
-        agents = client.search(skill=skill, min_confidence=min_confidence, limit=limit)
+
+        if fetch_all:
+            agents = client.search_all(skill=skill, min_confidence=min_confidence)
+        else:
+            agents = client.search(skill=skill, min_confidence=min_confidence, limit=limit)
 
         if output_json:
             print(json.dumps([a.model_dump() for a in agents], indent=2))
@@ -139,21 +286,29 @@ def search(skill, min_confidence, limit, registry, api_key, output_json):
 
 @cli.command()
 @click.argument("agent_id")
-@click.option("--registry", "-r", default="http://localhost:3000", help="Registry URL")
-@click.option("--api-key", "-k", help="API key for authentication")
+@click.option("--registry", "-r", help="Registry URL")
+@click.option("--api-key", "-k", help="API key")
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
-def get(agent_id, registry, api_key, output_json):
+@click.option("--save", type=click.Path(), help="Save to file")
+def get(agent_id, registry, api_key, output_json, save):
     """
     Get an agent profile by ID
 
     \b
-    Example:
+    Examples:
       aip get did:aip:my-agent
+      aip get did:aip:my-agent --save agent.yaml
       aip get did:aip:my-agent --json
     """
     try:
         client = get_client(registry, api_key)
         agent = client.get_agent(agent_id)
+
+        if save:
+            save_path = Path(save)
+            format = "yaml" if save_path.suffix in [".yaml", ".yml"] else "json"
+            save_agent_to_file(agent, save_path, format=format)
+            rprint(f"[green]✅ Saved to {save}[/green]")
 
         if output_json:
             print(json.dumps(agent.model_dump(), indent=2))
@@ -187,8 +342,8 @@ def get(agent_id, registry, api_key, output_json):
 
 @cli.command()
 @click.argument("agent_id")
-@click.option("--registry", "-r", default="http://localhost:3000", help="Registry URL")
-@click.option("--api-key", "-k", help="API key for authentication")
+@click.option("--registry", "-r", help="Registry URL")
+@click.option("--api-key", "-k", help="API key")
 @click.confirmation_option(prompt="Are you sure you want to delete this agent?")
 def delete(agent_id, registry, api_key):
     """
@@ -209,13 +364,40 @@ def delete(agent_id, registry, api_key):
 
 
 @cli.command()
+@click.argument("agent_ids", nargs=-1)
+@click.option("--registry", "-r", help="Registry URL")
+@click.option("--api-key", "-k", help="API key")
+@click.confirmation_option(prompt="Are you sure you want to delete these agents?")
+def batch_delete_cmd(agent_ids, registry, api_key):
+    """
+    Delete multiple agents
+
+    \b
+    Examples:
+      aip batch-delete did:aip:agent1 did:aip:agent2
+    """
+    if not agent_ids:
+        rprint("[yellow]No agent IDs provided[/yellow]")
+        return
+
+    client = get_client(registry, api_key)
+    result = batch_delete(client, list(agent_ids))
+
+    rprint(f"[green]✅ Deleted: {result['success']}[/green]")
+    if result["failed"] > 0:
+        rprint(f"[red]❌ Failed: {result['failed']}[/red]")
+        for err in result["errors"]:
+            rprint(f"   - {err['id']}: {err['error']}")
+
+
+@cli.command()
 @click.argument("agent_id")
 @click.option("--tasks", type=int, help="Tasks completed")
 @click.option("--response-time", type=int, help="Avg response time (ms)")
 @click.option("--success-rate", type=float, help="Success rate (0.0-1.0)")
 @click.option("--uptime", type=float, help="Uptime in last 30 days (0.0-1.0)")
-@click.option("--registry", "-r", default="http://localhost:3000", help="Registry URL")
-@click.option("--api-key", "-k", help="API key for authentication")
+@click.option("--registry", "-r", help="Registry URL")
+@click.option("--api-key", "-k", help="API key")
 def metrics(agent_id, tasks, response_time, success_rate, uptime, registry, api_key):
     """
     Report metrics for an agent
@@ -241,6 +423,38 @@ def metrics(agent_id, tasks, response_time, success_rate, uptime, registry, api_
     except AIPClientError as e:
         rprint(f"[red]❌ Failed: {e.message}[/red]")
         raise click.Abort()
+
+
+@cli.command()
+@click.option("--registry", "-r", help="Registry URL")
+@click.option("--api-key", "-k", help="API key")
+def health(registry, api_key):
+    """
+    Check registry health status
+
+    \b
+    Example:
+      aip health
+    """
+    try:
+        client = get_client(registry, api_key)
+        result = client.health_check()
+
+        status_color = "green" if result.get("status") == "healthy" else "red"
+        db_color = "green" if result.get("database") == "connected" else "red"
+
+        rprint(f"[{status_color}]Status: {result.get('status')}[/{status_color}]")
+        rprint(f"[{db_color}]Database: {result.get('database')}[/{db_color}]")
+        rprint(f"Timestamp: {result.get('timestamp')}")
+
+    except AIPClientError as e:
+        rprint(f"[red]❌ Health check failed: {e.message}[/red]")
+        raise click.Abort()
+
+
+# Register batch commands with proper names
+cli.add_command(batch_register_cmd, name="batch-register")
+cli.add_command(batch_delete_cmd, name="batch-delete")
 
 
 if __name__ == "__main__":
