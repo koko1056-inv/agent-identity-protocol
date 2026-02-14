@@ -21,8 +21,10 @@ model Agent {
   proofOfWork Json?    @map("proof_of_work")
   
   // Relations
-  capabilities Capability[]
-  metrics      Metrics?
+  capabilities     Capability[]
+  metrics          Metrics?
+  reviews          Review[]
+  reputationScore  ReputationScore?
   
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -94,4 +96,88 @@ model Webhook {
   
   @@index([isActive])
   @@map("webhooks")
+}
+
+enum ReviewRating {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+model Review {
+  id         String       @id @default(uuid())
+  agentId    String       @map("agent_id")
+  agent      Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  reviewerId String?      @map("reviewer_id")
+  rating     ReviewRating
+  comment    String?
+  metadata   Json?
+  createdAt  DateTime     @default(now()) @map("created_at")
+  
+  @@index([agentId])
+  @@index([rating])
+  @@index([createdAt])
+  @@map("reviews")
+}
+
+model ReputationScore {
+  id                String   @id @default(uuid())
+  agentId           String   @unique @map("agent_id")
+  agent             Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  
+  // Composite scores (0.0 - 1.0)
+  overallScore      Float    @default(0.5) @map("overall_score")
+  performanceScore  Float    @default(0.5) @map("performance_score")
+  reliabilityScore  Float    @default(0.5) @map("reliability_score")
+  communityScore    Float    @default(0.5) @map("community_score")
+  
+  // Review statistics
+  totalReviews      Int      @default(0) @map("total_reviews")
+  positiveReviews   Int      @default(0) @map("positive_reviews")
+  neutralReviews    Int      @default(0) @map("neutral_reviews")
+  negativeReviews   Int      @default(0) @map("negative_reviews")
+  
+  lastCalculatedAt  DateTime @default(now()) @map("last_calculated_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  @@index([overallScore])
+  @@map("reputation_scores")
+}
+
+model FederatedRegistry {
+  id                   String            @id @default(uuid())
+  name                 String
+  url                  String            @unique
+  apiKey               String?           @map("api_key")
+  isActive             Boolean           @default(true) @map("is_active")
+  isTrusted            Boolean           @default(false) @map("is_trusted")
+  syncEnabled          Boolean           @default(true) @map("sync_enabled")
+  lastSyncAt           DateTime?         @map("last_sync_at")
+  syncIntervalMinutes  Int               @default(60) @map("sync_interval_minutes")
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+  
+  federatedAgents      FederatedAgent[]
+  
+  @@index([isActive])
+  @@map("federated_registries")
+}
+
+model FederatedAgent {
+  id                String             @id @default(uuid())
+  agentId           String             @map("agent_id")
+  sourceRegistryId  String             @map("source_registry_id")
+  sourceRegistry    FederatedRegistry  @relation(fields: [sourceRegistryId], references: [id], onDelete: Cascade)
+  sourceUrl         String             @map("source_url")
+  agentData         Json               @map("agent_data")
+  isVerified        Boolean            @default(false) @map("is_verified")
+  lastSyncedAt      DateTime           @default(now()) @map("last_synced_at")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  
+  @@unique([agentId, sourceRegistryId])
+  @@index([agentId])
+  @@index([sourceRegistryId])
+  @@map("federated_agents")
 }

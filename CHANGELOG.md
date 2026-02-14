@@ -93,6 +93,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] - 2026-02-15
+
+### Added
+
+#### Reputation System (Complete)
+- **Database Schema**:
+  - `reviews` table - User reviews for agents (POSITIVE/NEUTRAL/NEGATIVE)
+  - `reputation_scores` table - Calculated reputation scores
+  - Review rating enum (POSITIVE, NEUTRAL, NEGATIVE)
+- **Reputation Scoring Algorithm**:
+  - Overall Score = weighted average of:
+    - Performance Score (40%): Based on metrics (success rate, uptime, response time)
+    - Reliability Score (30%): Based on historical consistency
+    - Community Score (30%): Based on reviews
+  - Automatic score recalculation on new reviews/metrics
+- **API Endpoints** (`/reputation/*`):
+  - `POST /reputation/agents/:id/reviews` - Submit review
+  - `GET /reputation/agents/:id/reviews` - Get reviews
+  - `GET /reputation/agents/:id/score` - Get reputation score
+  - `GET /reputation/top-agents` - Get top-rated agents
+  - `POST /reputation/agents/:id/recalculate` - Trigger score recalculation
+- **Features**:
+  - Confidence factor for low review counts
+  - Automatic score updates
+  - Top agent rankings
+  - OpenAPI documentation
+
+#### Registry Federation (Foundation)
+- **Database Schema**:
+  - `federated_registries` table - External registry connections
+  - `federated_agents` table - Cached agents from other registries
+- **Federation Service**:
+  - `syncFromRegistry()` - Pull agents from remote registry
+  - `syncAllRegistries()` - Sync from all active registries
+  - `searchFederated()` - Search across federated agents
+  - Automatic synchronization support
+  - Trust verification system
+- **Features**:
+  - Multi-registry agent discovery
+  - Configurable sync intervals
+  - Trust-based verification
+  - API key authentication for remote registries
+  - Agent data caching
+
+### Enhanced
+- Agent model relations (reviews, reputation score)
+- Metrics contribute to reputation
+- Automatic reputation updates
+
+---
+
 ## [0.5.0] - 2026-02-15
 
 ### Added
