@@ -93,6 +93,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.0] - 2026-02-15
+
+### Added
+
+#### OpenAPI/Swagger Documentation
+- **Automatic API Documentation** - `/api-docs` endpoint
+  - Interactive Swagger UI
+  - Complete API specification
+  - Schema definitions for all models
+  - Request/response examples
+  - Authentication documentation
+- **Swagger JSON** - `/swagger.json` endpoint for programmatic access
+- **Comprehensive API Docs** - All endpoints documented with JSDoc
+
+#### WebHook Notification System
+- **Event-based Notifications** - Real-time event notifications
+  - `agent.registered`
+  - `agent.updated`
+  - `agent.deleted`
+  - `agent.metrics_reported`
+- **Webhook Management**:
+  - Database schema for webhooks
+  - Service layer for webhook delivery
+  - HMAC signature verification
+  - Timeout protection (5 seconds)
+  - Fire-and-forget delivery (non-blocking)
+  - Last triggered timestamp tracking
+- **Security**: Optional HMAC-SHA256 signature verification
+
+### Documentation
+- Removed Discord link from README (as requested)
+
+---
+
 ## [0.3.1] - 2026-02-15
 
 ### Added

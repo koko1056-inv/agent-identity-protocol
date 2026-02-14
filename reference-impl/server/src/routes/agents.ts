@@ -20,8 +20,47 @@ const AUTH_ENABLED = process.env.REQUIRE_API_KEY === 'true';
 const conditionalAuth = AUTH_ENABLED ? [authenticateApiKey, requirePermission('write')] : [];
 
 /**
- * POST /agents
- * Register a new agent (requires authentication if enabled)
+ * @openapi
+ * /agents:
+ *   post:
+ *     tags:
+ *       - Agents
+ *     summary: Register a new agent
+ *     description: Register a new AI agent in the registry
+ *     security:
+ *       - ApiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/AgentProfile'
+ *     responses:
+ *       201:
+ *         description: Agent registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: string
+ *                   example: did:aip:my-agent
+ *                 registered_at:
+ *                   type: string
+ *                   format: date-time
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized (API key required)
+ *       409:
+ *         description: Agent already exists
+ *       429:
+ *         description: Rate limit exceeded
  */
 router.post(
   '/',
@@ -80,8 +119,63 @@ router.post(
 );
 
 /**
- * GET /agents
- * Search for agents (with caching)
+ * @openapi
+ * /agents:
+ *   get:
+ *     tags:
+ *       - Agents
+ *     summary: Search for agents
+ *     description: Search and discover agents by skill and confidence level
+ *     parameters:
+ *       - in: query
+ *         name: skill
+ *         schema:
+ *           type: string
+ *         description: Skill to search for (e.g., "text-generation")
+ *         example: text-generation
+ *       - in: query
+ *         name: min_confidence
+ *         schema:
+ *           type: number
+ *           minimum: 0
+ *           maximum: 1
+ *           default: 0.7
+ *         description: Minimum confidence level (0.0 - 1.0)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 20
+ *         description: Maximum number of results
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *           default: 0
+ *         description: Pagination offset
+ *     responses:
+ *       200:
+ *         description: Search results
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 results:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/AgentProfile'
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 per_page:
+ *                   type: integer
+ *       429:
+ *         description: Rate limit exceeded
  */
 router.get('/', searchLimiter, async (req: Request, res: Response, next: NextFunction) => {
   try {

@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import dotenv from 'dotenv';
+import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerUi from 'swagger-ui-express';
 import agentsRouter from './routes/agents';
 import adminRouter from './routes/admin';
 import { errorHandler } from './middleware/errorHandler';
@@ -11,6 +13,7 @@ import { authenticateApiKey, requirePermission } from './middleware/auth';
 import { prisma } from './db/client';
 import { validateConfig } from './utils/config';
 import { logger } from './utils/logger';
+import { swaggerOptions } from './config/swagger';
 
 // Load environment variables
 dotenv.config();
@@ -86,11 +89,23 @@ app.get('/', (req, res) => {
   });
 });
 
+// Swagger API documentation
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'AIP Registry API Documentation',
+}));
+
+// Swagger JSON endpoint
+app.get('/swagger.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
+
 // Routes
 app.use('/agents', agentsRouter);
 
-// Admin routes (protected - requires admin setup)
-// For now, these are unprotected. In production, add proper admin authentication
+// Admin routes (protected)
 app.use('/admin', adminRouter);
 
 // 404 handler

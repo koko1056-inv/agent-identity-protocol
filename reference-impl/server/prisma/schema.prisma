@@ -82,3 +82,16 @@ model ApiKey {
   @@index([isActive])
   @@map("api_keys")
 }
+
+model Webhook {
+  id               String    @id @default(uuid())
+  url              String
+  events           String[]  @default(["agent.registered", "agent.updated", "agent.deleted"])
+  secret           String?
+  isActive         Boolean   @default(true) @map("is_active")
+  lastTriggeredAt  DateTime? @map("last_triggered_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  
+  @@index([isActive])
+  @@map("webhooks")
+}

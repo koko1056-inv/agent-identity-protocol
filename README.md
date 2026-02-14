@@ -244,7 +244,6 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ## Community
 
 - **GitHub Discussions**: Ask questions, share ideas
-- **Discord**: [Join our server](https://discord.gg/aip) (coming soon)
 - **Monthly Calls**: First Tuesday, 6pm UTC
 
 ## Specification
