@@ -1,0 +1,64 @@
+// Prisma schema for AIP Registry
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Agent {
+  id          String   @id
+  name        String
+  version     String
+  description String?
+  
+  // JSON fields for flexible schema
+  endpoints   Json?
+  pricing     Json?
+  metadata    Json?
+  proofOfWork Json?    @map("proof_of_work")
+  
+  // Relations
+  capabilities Capability[]
+  metrics      Metrics?
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  @@index([name])
+  @@map("agents")
+}
+
+model Capability {
+  id         Int    @id @default(autoincrement())
+  agentId    String @map("agent_id")
+  agent      Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  
+  skill      String
+  confidence Float
+  parameters Json?
+  
+  @@index([skill])
+  @@index([agentId, skill])
+  @@map("capabilities")
+}
+
+model Metrics {
+  id                Int      @id @default(autoincrement())
+  agentId           String   @unique @map("agent_id")
+  agent             Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  
+  tasksCompleted    Int?     @map("tasks_completed")
+  avgResponseTimeMs Int?     @map("avg_response_time_ms")
+  successRate       Float?   @map("success_rate")
+  uptime30d         Float?   @map("uptime_30d")
+  
+  // Custom metrics as JSON
+  customMetrics     Json?    @map("custom_metrics")
+  
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  @@map("metrics")
+}

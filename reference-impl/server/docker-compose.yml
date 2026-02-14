@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: aip-postgres
+    environment:
+      POSTGRES_USER: aip
+      POSTGRES_PASSWORD: aip_password
+      POSTGRES_DB: aip_registry
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aip"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build: .
+    container_name: aip-server
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://aip:aip_password@postgres:5432/aip_registry?schema=public
+      NODE_ENV: production
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    command: sh -c "npx prisma migrate deploy && npm start"
+
+volumes:
+  postgres_data:
