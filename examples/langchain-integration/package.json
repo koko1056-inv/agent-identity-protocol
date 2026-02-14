@@ -1,0 +1,16 @@
+{
+  "name": "aip-langchain-example",
+  "version": "1.0.0",
+  "description": "LangChain integration example for AIP",
+  "main": "register-langchain-agent.ts",
+  "scripts": {
+    "start": "tsx register-langchain-agent.ts"
+  },
+  "dependencies": {
+    "agent-identity-protocol": "file:../../sdk/typescript"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}

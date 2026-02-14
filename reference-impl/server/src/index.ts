@@ -4,8 +4,10 @@ import helmet from 'helmet';
 import compression from 'compression';
 import dotenv from 'dotenv';
 import agentsRouter from './routes/agents';
+import adminRouter from './routes/admin';
 import { errorHandler } from './middleware/errorHandler';
 import { requestIdMiddleware } from './middleware/requestId';
+import { authenticateApiKey, requirePermission } from './middleware/auth';
 import { prisma } from './db/client';
 import { validateConfig } from './utils/config';
 import { logger } from './utils/logger';
@@ -86,6 +88,10 @@ app.get('/', (req, res) => {
 
 // Routes
 app.use('/agents', agentsRouter);
+
+// Admin routes (protected - requires admin setup)
+// For now, these are unprotected. In production, add proper admin authentication
+app.use('/admin', adminRouter);
 
 // 404 handler
 app.use((req, res) => {

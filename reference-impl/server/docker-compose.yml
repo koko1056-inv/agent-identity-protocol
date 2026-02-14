@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: aip_password
       POSTGRES_DB: aip_registry
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -17,21 +17,74 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - aip-network
 
   server:
     build: .
     container_name: aip-server
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:3000"
     environment:
       DATABASE_URL: postgresql://aip:aip_password@postgres:5432/aip_registry?schema=public
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-production}
       PORT: 3000
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      REQUIRE_API_KEY: ${REQUIRE_API_KEY:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
     command: sh -c "npx prisma migrate deploy && npm start"
+    networks:
+      - aip-network
+
+  # Development server with hot reload
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: aip-dev
+    ports:
+      - "${DEV_PORT:-3001}:3000"
+    environment:
+      DATABASE_URL: postgresql://aip:aip_password@postgres:5432/aip_registry?schema=public
+      NODE_ENV: development
+      PORT: 3000
+      LOG_LEVEL: debug
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - ./prisma:/app/prisma
+      - /app/node_modules
+    command: npm run dev
+    profiles:
+      - dev
+    networks:
+      - aip-network
+
+  # pgAdmin for database management (optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: aip-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@aip.dev
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    depends_on:
+      - postgres
+    profiles:
+      - tools
+    networks:
+      - aip-network
 
 volumes:
   postgres_data:
+
+networks:
+  aip-network:
+    driver: bridge

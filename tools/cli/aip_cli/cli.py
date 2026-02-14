@@ -52,7 +52,7 @@ def get_client(
 
 
 @click.group()
-@click.version_option(version="0.1.0")
+@click.version_option(version="0.3.0")
 def cli():
     """
     AIP CLI - Command-line tools for Agent Identity Protocol
@@ -77,6 +77,15 @@ def cli():
 @cli.group()
 def config():
     """Manage AIP CLI configuration"""
+    pass
+
+
+# ============= API KEY COMMANDS =============
+
+
+@cli.group(name="keys")
+def api_keys():
+    """Manage API keys"""
     pass
 
 
@@ -455,6 +464,194 @@ def health(registry, api_key):
 # Register batch commands with proper names
 cli.add_command(batch_register_cmd, name="batch-register")
 cli.add_command(batch_delete_cmd, name="batch-delete")
+
+
+@api_keys.command(name="create")
+@click.option("--name", "-n", required=True, help="Key name")
+@click.option("--description", "-d", help="Key description")
+@click.option("--read", is_flag=True, default=True, help="Grant read permission")
+@click.option("--write", is_flag=True, help="Grant write permission")
+@click.option("--delete", is_flag=True, help="Grant delete permission")
+@click.option("--rate-limit", type=int, help="Rate limit (requests per minute)")
+@click.option("--expires", help="Expiration date (ISO format)")
+@click.option("--registry", "-r", help="Registry URL")
+def create_api_key(name, description, read, write, delete, rate_limit, expires, registry):
+    """
+    Create a new API key
+
+    \b
+    Examples:
+      aip keys create --name "my-key" --write
+      aip keys create -n "admin-key" --write --delete --rate-limit 1000
+    """
+    try:
+        cfg = load_config()
+        registry_url = registry or cfg.registry_url
+
+        import requests
+
+        payload = {
+            "name": name,
+            "permissions": {
+                "read": read,
+                "write": write,
+                "delete": delete,
+            },
+        }
+
+        if description:
+            payload["description"] = description
+        if rate_limit:
+            payload["rateLimit"] = rate_limit
+        if expires:
+            payload["expiresAt"] = expires
+
+        response = requests.post(
+            f"{registry_url}/admin/api-keys",
+            json=payload,
+            timeout=30,
+        )
+
+        if not response.ok:
+            rprint(f"[red]❌ Failed to create API key: {response.text}[/red]")
+            raise click.Abort()
+
+        data = response.json()
+
+        rprint(f"[green]✅ API key created successfully![/green]")
+        rprint(f"\n[yellow]⚠️  Save this key - it won't be shown again![/yellow]")
+        rprint(f"\n[cyan]Key:[/cyan] {data['key']}")
+        rprint(f"[cyan]ID:[/cyan] {data['id']}")
+        rprint(f"[cyan]Name:[/cyan] {data['name']}")
+        rprint(f"[cyan]Permissions:[/cyan] {data['permissions']}")
+
+    except Exception as e:
+        rprint(f"[red]❌ Error: {e}[/red]")
+        raise click.Abort()
+
+
+@api_keys.command(name="list")
+@click.option("--registry", "-r", help="Registry URL")
+def list_api_keys(registry):
+    """
+    List all API keys
+
+    \b
+    Example:
+      aip keys list
+    """
+    try:
+        cfg = load_config()
+        registry_url = registry or cfg.registry_url
+
+        import requests
+
+        response = requests.get(
+            f"{registry_url}/admin/api-keys",
+            timeout=30,
+        )
+
+        if not response.ok:
+            rprint(f"[red]❌ Failed to list API keys: {response.text}[/red]")
+            raise click.Abort()
+
+        data = response.json()
+        keys = data.get("apiKeys", [])
+
+        if not keys:
+            rprint("[yellow]No API keys found.[/yellow]")
+            return
+
+        # Create table
+        table = Table(title=f"API Keys ({len(keys)})")
+        table.add_column("ID", style="cyan")
+        table.add_column("Name", style="green")
+        table.add_column("Key Preview", style="yellow")
+        table.add_column("Active", style="blue")
+        table.add_column("Last Used", style="magenta")
+
+        for key in keys:
+            table.add_row(
+                key["id"][:8] + "...",
+                key["name"],
+                key["keyPreview"],
+                "✓" if key["isActive"] else "✗",
+                key.get("lastUsedAt", "Never")[:19] if key.get("lastUsedAt") else "Never",
+            )
+
+        console.print(table)
+
+    except Exception as e:
+        rprint(f"[red]❌ Error: {e}[/red]")
+        raise click.Abort()
+
+
+@api_keys.command(name="revoke")
+@click.argument("key_id")
+@click.option("--registry", "-r", help="Registry URL")
+@click.confirmation_option(prompt="Are you sure you want to revoke this API key?")
+def revoke_api_key(key_id, registry):
+    """
+    Revoke (disable) an API key
+
+    \b
+    Example:
+      aip keys revoke <key-id>
+    """
+    try:
+        cfg = load_config()
+        registry_url = registry or cfg.registry_url
+
+        import requests
+
+        response = requests.post(
+            f"{registry_url}/admin/api-keys/{key_id}/revoke",
+            timeout=30,
+        )
+
+        if not response.ok:
+            rprint(f"[red]❌ Failed to revoke API key: {response.text}[/red]")
+            raise click.Abort()
+
+        rprint(f"[green]✅ API key revoked successfully![/green]")
+
+    except Exception as e:
+        rprint(f"[red]❌ Error: {e}[/red]")
+        raise click.Abort()
+
+
+@api_keys.command(name="delete")
+@click.argument("key_id")
+@click.option("--registry", "-r", help="Registry URL")
+@click.confirmation_option(prompt="Are you sure you want to delete this API key?")
+def delete_api_key(key_id, registry):
+    """
+    Permanently delete an API key
+
+    \b
+    Example:
+      aip keys delete <key-id>
+    """
+    try:
+        cfg = load_config()
+        registry_url = registry or cfg.registry_url
+
+        import requests
+
+        response = requests.delete(
+            f"{registry_url}/admin/api-keys/{key_id}",
+            timeout=30,
+        )
+
+        if response.status_code not in [200, 204]:
+            rprint(f"[red]❌ Failed to delete API key: {response.text}[/red]")
+            raise click.Abort()
+
+        rprint(f"[green]✅ API key deleted successfully![/green]")
+
+    except Exception as e:
+        rprint(f"[red]❌ Error: {e}[/red]")
+        raise click.Abort()
 
 
 if __name__ == "__main__":

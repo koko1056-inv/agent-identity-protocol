@@ -62,3 +62,23 @@ model Metrics {
   
   @@map("metrics")
 }
+
+model ApiKey {
+  id          String    @id @default(uuid())
+  key         String    @unique
+  name        String
+  description String?
+  
+  // Permissions
+  permissions Json      @default("{\"read\": true, \"write\": false, \"delete\": false}")
+  rateLimit   Int?      @default(100) @map("rate_limit")
+  
+  // Status
+  isActive    Boolean   @default(true) @map("is_active")
+  lastUsedAt  DateTime? @map("last_used_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  expiresAt   DateTime? @map("expires_at")
+  
+  @@index([isActive])
+  @@map("api_keys")
+}

@@ -7,16 +7,27 @@ import {
 } from '../middleware/validation';
 import { NotFoundError, ConflictError } from '../middleware/errorHandler';
 import { searchLimiter, writeLimiter, registerLimiter } from '../middleware/rateLimit';
+import { authenticateApiKey, requirePermission, optionalAuth } from '../middleware/auth';
 import { searchCache, agentCache } from '../utils/cache';
 import { logger } from '../utils/logger';
 
 const router = Router();
 
+// Check if API key authentication is enabled
+const AUTH_ENABLED = process.env.REQUIRE_API_KEY === 'true';
+
+// Conditional authentication middleware
+const conditionalAuth = AUTH_ENABLED ? [authenticateApiKey, requirePermission('write')] : [];
+
 /**
  * POST /agents
- * Register a new agent
+ * Register a new agent (requires authentication if enabled)
  */
-router.post('/', registerLimiter, async (req: Request, res: Response, next: NextFunction) => {
+router.post(
+  '/',
+  registerLimiter,
+  ...conditionalAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
   try {
     // Validate request body
     const data = AgentProfileSchema.parse(req.body);
@@ -65,7 +76,8 @@ router.post('/', registerLimiter, async (req: Request, res: Response, next: Next
   } catch (error) {
     next(error);
   }
-});
+  }
+);
 
 /**
  * GET /agents
@@ -222,9 +234,13 @@ router.get('/:id', searchLimiter, async (req: Request, res: Response, next: Next
 
 /**
  * PUT /agents/:id
- * Update an agent profile
+ * Update an agent profile (requires authentication if enabled)
  */
-router.put('/:id', writeLimiter, async (req: Request, res: Response, next: NextFunction) => {
+router.put(
+  '/:id',
+  writeLimiter,
+  ...conditionalAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = AgentProfileSchema.parse(req.body);
 
@@ -269,13 +285,18 @@ router.put('/:id', writeLimiter, async (req: Request, res: Response, next: NextF
   } catch (error) {
     next(error);
   }
-});
+  }
+);
 
 /**
  * DELETE /agents/:id
- * Delete an agent
+ * Delete an agent (requires authentication if enabled)
  */
-router.delete('/:id', writeLimiter, async (req: Request, res: Response, next: NextFunction) => {
+router.delete(
+  '/:id',
+  writeLimiter,
+  ...conditionalAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
   try {
     const existing = await prisma.agent.findUnique({
       where: { id: req.params.id },
@@ -297,13 +318,18 @@ router.delete('/:id', writeLimiter, async (req: Request, res: Response, next: Ne
   } catch (error) {
     next(error);
   }
-});
+  }
+);
 
 /**
  * POST /agents/:id/metrics
- * Report metrics for an agent
+ * Report metrics for an agent (requires authentication if enabled)
  */
-router.post('/:id/metrics', writeLimiter, async (req: Request, res: Response, next: NextFunction) => {
+router.post(
+  '/:id/metrics',
+  writeLimiter,
+  ...conditionalAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = MetricsUpdateSchema.parse(req.body);
 
@@ -341,6 +367,7 @@ router.post('/:id/metrics', writeLimiter, async (req: Request, res: Response, ne
   } catch (error) {
     next(error);
   }
-});
+  }
+);
 
 export default router;

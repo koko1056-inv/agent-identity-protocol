@@ -93,13 +93,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] - 2026-02-15
+
+### Added
+
+#### Authentication & Security
+- **API Key System** - Complete API key management
+- **Admin API** - Endpoints for creating/managing API keys
+  - `POST /admin/api-keys` - Create API key
+  - `GET /admin/api-keys` - List all keys
+  - `GET /admin/api-keys/:id` - Get specific key
+  - `PATCH /admin/api-keys/:id` - Update key
+  - `DELETE /admin/api-keys/:id` - Delete key
+  - `POST /admin/api-keys/:id/revoke` - Revoke key
+- **Permission System** - Granular read/write/delete permissions
+- **Optional Authentication** - Can be disabled for development (`REQUIRE_API_KEY=false`)
+- **API Key Expiration** - Support for expiring keys
+- **Rate Limiting per Key** - Custom rate limits per API key
+
+#### CLI Tools
+- **API Key Management Commands**:
+  - `aip keys create` - Create new API key
+  - `aip keys list` - List all keys
+  - `aip keys revoke` - Revoke a key
+  - `aip keys delete` - Delete a key
+- **Enhanced Security** - Support for authenticated requests
+
+#### Development Experience
+- **Improved Docker Compose**:
+  - Development profile with hot reload (`docker-compose --profile dev up`)
+  - pgAdmin for database management (`docker-compose --profile tools up`)
+  - Environment variable configuration
+  - Network isolation
+- **Development Dockerfile** - Optimized for local development
+- **Integration Test Suite** - Test templates for E2E testing
+
+#### Examples
+- **LangChain Integration** - Complete example of registering LangChain agents
+- **Integration Patterns** - Documentation for framework integration
+
+### Changed
+- **Authentication Middleware** - Applied to all write operations (register/update/delete/metrics)
+- **Environment Configuration** - Added `REQUIRE_API_KEY`, `LOG_LEVEL` environment variables
+- **Docker Compose** - Restructured for better dev/prod separation
+
+### Security
+- **API Key Storage** - Secure random generation (base64url, 32 bytes)
+- **Permission Checks** - Enforced at middleware level
+- **Key Masking** - Keys only shown once at creation
+
+---
+
 ## [Unreleased]
 
 ### Planned
-- Authentication & authorization (API keys, JWT)
 - Agent reputation system
 - Distributed registry federation
 - Proof of work verification
 - WebSocket support for real-time updates
 - GraphQL API
 - Browser extension for registry exploration
+- OAuth2/JWT authentication
