@@ -1,0 +1,37 @@
+{
+  "name": "agent-identity-protocol",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the Agent Identity Protocol (AIP)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "identity",
+    "protocol",
+    "registry",
+    "discovery"
+  ],
+  "author": "Agent Identity Protocol Working Group",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agent-identity-protocol/aip"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0"
+  },
+  "dependencies": {},
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}
